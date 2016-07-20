@@ -1,0 +1,10 @@
+app:
+   address: localhost
+   port: 9000
+   apiVersion: v1
+cassandra:
+   contactPoints: 172.17.0.2
+   port: 9042
+   protoVersion: 4
+   keySpace: neurose_order
+

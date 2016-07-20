@@ -1,91 +1,120 @@
 package main
 
 import (
-	// "fmt"
-	// "log"
-	"encoding/json"
-	log "github.com/Sirupsen/logrus"
+	// "encoding/json"
+	"fmt"
 	"github.com/gocql/gocql"
 	"github.com/kataras/iris"
 	"github.com/satori/go.uuid"
-	// "github.com/valyala/fasthttp"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
+	"log"
+	"time"
 )
 
-// var cluster *gocql.ClusterConfig
+const DEFAULT_CASSANDRA_HOST = "127.0.0.1"
+
+const (
+	Version = "   Kraken Release: 0.0.1"
+
+	banner = `          
+            /\          
+           /  \ 
+          /"\/"\ 
+         / \  / \
+         |(@)(@)|
+         )  __  (
+        //'))(( \\
+       (( ((  )) ))        
+        \\ ))(( //` + Version + ` `
+)
+
 var session *gocql.Session
 
-type Order struct {
-	Id        string `json:"-"`
-	Reference string `json:"reference"`
+var config = getConfiguration()
+
+type Config struct {
+	App struct {
+		Address    string
+		Port       string
+		Apiversion string
+	}
+	Cassandra struct {
+		ContactPoints string
+		Port          string
+		ProtoVersion  int
+		KeySpace      string
+	}
 }
 
-type OrderItemAPI struct {
-	*iris.Context
+type Order struct {
+	Id        string      `json:"id"`
+	Reference string      `json:"reference"`
+	Number    string      `json:number`
+	Status    OrderStatus `json:status`
+	CreatedAt time.Time   `json:createdAt`
+	UpdatedAt time.Time   `json:updatedAt`
+	Notes     string      `json:updatedAt`
+	Price     int         `json:price`
 }
-type OrdersAPI struct {
-	*iris.Context
+
+type OrderItem struct {
+	Id       string `json:"sku"`
+	Price    int    `json:"unit_price"`
+	Quantity int    `json:"quantity"`
+	Order    *Order `json:"-"`
 }
-type OrderAPI struct {
-	*iris.Context
+
+type Transaction struct {
+	Id                string          `json:"id"`
+	ExternalId        string          `json:"external_id"`
+	Amount            int             `json:amount`
+	Type              TransactionType `json:type`
+	AuthorizationCode string          `json:authorization_code`
+	CardBrand         string          `json:card_brand`
+	CardBin           string          `json:card_bin`
+	CardLast          string          `json:card_last`
+}
+
+func getConfiguration() Config {
+	data, err := ioutil.ReadFile("./config.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	t := Config{}
+
+	err = yaml.Unmarshal([]byte(data), &t)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+	fmt.Printf("--- Configuration:\n%v\n\n", t)
+
+	return t
 }
 
 func main() {
 
+	var err error
+	iris.Config.DisableBanner = true
+
 	cluster := gocql.NewCluster("172.17.0.2")
 	cluster.ProtoVersion = 4
 	cluster.Keyspace = "neurose_order"
+	// cluster := gocql.NewCluster(config.Cassandra.ContactPoints)
+	// cluster.ProtoVersion = config.Cassandra.ProtoVersion
+	// cluster.Keyspace = config.Cassandra.KeySpace
 
-	session, _ = cluster.CreateSession()
-	defer session.Close()
+	session, err = cluster.CreateSession()
 
-	iris.API("/orders", OrdersAPI{})
-	iris.API("/orders/:orderId", OrderAPI{})
-	iris.API("/orders/:orderId/items", OrderItemAPI{})
-
-	iris.Listen(":3000")
-}
-
-func (api OrdersAPI) Post() {
-	order := Order{}
-
-	err := json.Unmarshal(api.PostBody(), &order)
+	iris.Logger.PrintBanner(banner, "Iniciado em: "+config.App.Address+":"+config.App.Port)
 
 	if err != nil {
-		log.Error(err)
-		api.SetStatusCode(iris.StatusBadRequest)
+		iris.Logger.Dangerf("nao foi possivel conectar ao cassandra", err)
 		return
 	}
 
-	order.Save()
+	defer session.Close()
 
-	// api.SetStatusCode(iris.StatusCreated)
-	// api.SetHeader("location", fmt.Sprintf("/orders/%s", order.Id))
-}
-
-func (api OrderAPI) Get() {
-	order := Order{}
-	order.Get(api.Param("orderId"))
-	api.JSON(iris.StatusOK, order)
-}
-
-func (o *Order) Save() {
-	// session, _ := cluster.CreateSession()
-	// defer session.Close()
-
-	o.Id = uuid.NewV4().String()
-
-	if err := session.Query("INSERT INTO \"order\" (id,reference) VALUES (?,?)", o.Id, o.Reference).Exec(); err != nil {
-		log.Error(err)
-	}
-}
-
-func (o *Order) Get(id string) {
-	log.Debugf("get order %s", id)
-
-	// session, _ := cluster.CreateSession()
-	// defer session.Close()
-
-	if err := session.Query("SELECT id, reference FROM \"order\" WHERE id = ? ", id).Scan(&o.Id, &o.Reference); err != nil {
-		log.Error(err)
-	}
+	iris.Listen(config.App.Address + ":" + config.App.Port)
 }
