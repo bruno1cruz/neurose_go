@@ -20,9 +20,6 @@ type OrderItemAPI struct {
 type TransactionsAPI struct {
 	*iris.Context
 }
-type TransactionAPI struct {
-	*iris.Context
-}
 
 func init() {
 	iris.API("/orders", OrdersAPI{})
@@ -30,7 +27,6 @@ func init() {
 	iris.API("/orders/:orderId/items", OrderItemsAPI{})
 	iris.API("/orders/:orderId/items/:orderItemId", OrderItemAPI{})
 	iris.API("/orders/:orderId/transactions", TransactionsAPI{})
-	iris.API("/orders/:orderId/transactions/:transactionId", TransactionAPI{})
 }
 
 func (api OrdersAPI) Post() {
@@ -50,7 +46,7 @@ func (api OrdersAPI) Post() {
 		api.SetStatusCode(iris.StatusInternalServerError)
 	} else {
 		api.SetStatusCode(iris.StatusCreated)
-		api.SetHeader("location", fmt.Sprintf("/orders/%s/%s", config.App.Apiversion, order.Id))
+		api.SetHeader("location", fmt.Sprintf("/orders/%s", order.Id))
 	}
 
 }
@@ -65,14 +61,28 @@ func (api OrderItemsAPI) Post() {
 	item := OrderItem{}
 
 	err := api.ReadJSON(&item)
-
 	if err != nil {
 		iris.Logger.Dangerf("%s", err)
-		api.SetStatusCode(iris.StatusBadRequest)
+		api.SetStatusCode(iris.StatusInternalServerError)
 		return
 	}
 
 	order := Order{Id: api.Param("orderId")}
+
+	err = order.Get(order.Id)
+	if err != nil {
+		iris.Logger.Dangerf("%s", err)
+		api.SetStatusCode(iris.StatusInternalServerError)
+		return
+	}
+
+	err = order.AddItem(item)
+	if err != nil {
+		iris.Logger.Dangerf("%s", err)
+		api.SetStatusCode(iris.StatusInternalServerError)
+		return
+	}
+
 	item.Order = &order
 
 	err = item.Save()
@@ -81,6 +91,57 @@ func (api OrderItemsAPI) Post() {
 	} else {
 		api.SetStatusCode(iris.StatusCreated)
 		api.SetHeader("location", fmt.Sprintf("/orders/%s/items/%s", order.Id, item.Id))
+	}
+
+}
+
+func (api TransactionsAPI) Post() {
+
+	transaction := Transaction{}
+
+	err := api.ReadJSON(&transaction)
+	if err != nil {
+		iris.Logger.Dangerf("%s", err)
+		api.SetStatusCode(iris.StatusInternalServerError)
+		return
+	}
+
+	order := Order{Id: api.Param("orderId")}
+
+	err = order.Get(order.Id)
+	if err != nil {
+		iris.Logger.Dangerf("%s", err)
+		api.SetStatusCode(iris.StatusInternalServerError)
+		return
+	}
+
+	err = order.AddTransaction(transaction)
+	if err != nil {
+		iris.Logger.Dangerf("%s", err)
+		api.SetStatusCode(iris.StatusInternalServerError)
+		return
+	}
+
+	transaction.Order = &order
+
+	err = transaction.Save()
+	if err != nil {
+		api.SetStatusCode(iris.StatusInternalServerError)
+	} else {
+		api.SetStatusCode(iris.StatusCreated)
+	}
+
+}
+
+func (api OrderItemAPI) Delete() {
+
+	item := OrderItem{}
+	item.Get(api.Param("orderItemId"))
+
+	err := item.Delete()
+	if err != nil {
+		iris.Logger.Dangerf("%s", err)
+		api.SetStatusCode(iris.StatusInternalServerError)
 	}
 
 }

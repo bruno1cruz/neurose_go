@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"github.com/gocql/gocql"
 	"github.com/kataras/iris"
-	"github.com/satori/go.uuid"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
-	"time"
 )
 
 const DEFAULT_CASSANDRA_HOST = "127.0.0.1"
@@ -45,35 +43,6 @@ type Config struct {
 		ProtoVersion  int
 		KeySpace      string
 	}
-}
-
-type Order struct {
-	Id        string      `json:"id"`
-	Reference string      `json:"reference"`
-	Number    string      `json:number`
-	Status    OrderStatus `json:status`
-	CreatedAt time.Time   `json:createdAt`
-	UpdatedAt time.Time   `json:updatedAt`
-	Notes     string      `json:updatedAt`
-	Price     int         `json:price`
-}
-
-type OrderItem struct {
-	Id       string `json:"sku"`
-	Price    int    `json:"unit_price"`
-	Quantity int    `json:"quantity"`
-	Order    *Order `json:"-"`
-}
-
-type Transaction struct {
-	Id                string          `json:"id"`
-	ExternalId        string          `json:"external_id"`
-	Amount            int             `json:amount`
-	Type              TransactionType `json:type`
-	AuthorizationCode string          `json:authorization_code`
-	CardBrand         string          `json:card_brand`
-	CardBin           string          `json:card_bin`
-	CardLast          string          `json:card_last`
 }
 
 func getConfiguration() Config {
